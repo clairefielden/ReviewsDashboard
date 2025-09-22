@@ -4,7 +4,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "postinstall": "chmod +x node_modules/.bin/* || true && chmod +x node_modules/vite/bin/vite.js || true && chmod +x node_modules/@esbuild/linux-*/*/bin/esbuild || true",
+    "postinstall": "node -e \"try{require('fs');}catch(e){}\" && npm run fix-perms || true",
+    "fix-perms": "chmod +x node_modules/.bin/* || true && chmod +x node_modules/vite/bin/vite.js || true && find node_modules/@esbuild -type f -name esbuild -exec chmod +x {} + || true && chmod +x node_modules/esbuild/bin/esbuild || true",
     "build": "vite build",
     "dev": "vite",
     "preview": "vite preview"
@@ -23,11 +24,15 @@
     "postcss": "^8.5.6",
     "tailwindcss": "^3.4.17",
     "typescript": "^5.5.4",
-    "vite": "^5.4.0"
+    "vite": "^5.4.0",
+    "esbuild": "^0.21.5"
   },
   "description": "",
   "main": "tailwind.config.js",
   "keywords": [],
   "author": "",
-  "license": "ISC"
+  "license": "ISC",
+  "engines": {
+    "node": ">=18"
+  }
 }
