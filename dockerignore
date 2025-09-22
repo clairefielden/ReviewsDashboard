@@ -1,0 +1,11 @@
+.git
+.gitignore
+target
+build
+node_modules
+.idea
+.vscode
+*.iml
+.env
+Dockerfile*
+docker-compose*
