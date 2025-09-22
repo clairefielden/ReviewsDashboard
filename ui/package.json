@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "postinstall": "chmod +x node_modules/.bin/* || true && chmod +x node_modules/vite/bin/vite.js || true",
+    "postinstall": "chmod +x node_modules/.bin/* || true && chmod +x node_modules/vite/bin/vite.js || true && chmod +x node_modules/@esbuild/linux-*/*/bin/esbuild || true",
     "build": "vite build",
     "dev": "vite",
     "preview": "vite preview"
