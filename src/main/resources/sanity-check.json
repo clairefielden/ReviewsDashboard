@@ -1,0 +1,22 @@
+{
+  "source": "hostaway",
+  "count": 1,
+  "reviews": [
+    {
+      "id": "7453",
+      "listingName": "2B N1 A - 29 Shoreditch Heights",
+      "guestName": "Shane Finkelstein",
+      "direction": "host_to_guest",
+      "status": "published",
+      "overallRating": null,
+      "categoryRatings": {
+        "cleanliness": 10,
+        "communication": 10,
+        "respect_house_rules": 10
+      },
+      "channel": "hostaway",
+      "text": "Shane and family are wonderful! Would definitely host again :)",
+      "submittedAt": "2020-08-21T22:45:14Z"
+    }
+  ]
+}

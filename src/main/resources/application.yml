@@ -1,0 +1,29 @@
+hostaway:
+  base-url: https://api.hostaway.com
+  account-id: ${HOSTAWAY_ACCOUNT_ID} # e.g. 61148
+  client-secret: ${HOSTAWAY_CLIENT_SECRET} # your API key / client secret
+  connect-timeout-ms: 6000
+  read-timeout-ms: 10000
+
+google:
+  places:
+    base-url: https://maps.googleapis.com/maps/api/place
+    api-key: ${GOOGLE_PLACES_API_KEY}      # set this in your env (do NOT hardcode)
+    connect-timeout-ms: 6000
+    read-timeout-ms: 10000
+
+listings:
+  googlePlaceIds:
+    "2B N1 A - 29 Shoreditch Heights": "EiQyOSBTaG9yZWRpdGNoIEhpZ2ggU3QsIExvbmRvbiBFMSwgVUsiMBIuChQKEgk9lFsYsRx2SBG5XY8bljPyFhAdKhQKEgndLAmksBx2SBGRgR4_p5cBgw"
+    "Modern 1 Bed Apartment in Wimbledon": "ChIJr7oGnCkPdkgR2mu54YKGydE"
+    "Hotel California": "ChIJldnqxowPdkgRTEMVtuOsEHQ"
+
+spring:
+  cache:
+    cache-names: [ google-reviews ]
+    caffeine:
+      spec: maximumSize=200,expireAfterWrite=6h
+
+server:
+  port: ${PORT:8080}
+
