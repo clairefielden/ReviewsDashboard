@@ -25,6 +25,10 @@ interface NormalizedReviewResponse {
 type Listing = { name: string; placeId: string; address?: string };
 
 /* ---------------- Utils ---------------- */
+const API_BASE =
+    (import.meta as any).env?.VITE_API_BASE_URL?.toString().replace(/\/$/, "") ||
+    ""; // if blank, relative /api/* works with Vercel rewrites
+
 async function safeJson<T = any>(res: Response): Promise<T | null> {
     if (!res.ok) return null;
     const t = await res.text();
@@ -79,7 +83,7 @@ function ReviewText({text}: { text: string | null }) {
                         : {
                             overflow: "hidden",
                             display: "-webkit-box",
-                            WebkitLineClamp: 3, // tighter for list view
+                            WebkitLineClamp: 3,
                             WebkitBoxOrient: "vertical",
                             overflowWrap: "anywhere",
                             whiteSpace: "pre-wrap",
@@ -107,8 +111,9 @@ export default function ManagerDashboard() {
     const [allListings, setAllListings] = useState<Listing[]>([]);
     const [reviews, setReviews] = useState<NormalizedReview[]>([]);
     const [loading, setLoading] = useState(true);
+    const [err, setErr] = useState<string | null>(null);
 
-    // filters (mirrors screenshot)
+    // filters
     const [query, setQuery] = useState("");
     const [channel, setChannel] = useState<string>("all");
     const [listing, setListing] = useState<string>("all");
@@ -118,7 +123,7 @@ export default function ManagerDashboard() {
     const [to, setTo] = useState<string>("");
     const [sort, setSort] = useState<"submittedAt" | "rating">("submittedAt");
     const [dir, setDir] = useState<"asc" | "desc">("desc");
-    const [onlySelected, setOnlySelected] = useState<boolean>(false); // reserved for future
+    const [onlySelected, setOnlySelected] = useState<boolean>(false); // reserved
 
     // add listing modal
     const [addOpen, setAddOpen] = useState(false);
@@ -127,22 +132,30 @@ export default function ManagerDashboard() {
     const [saving, setSaving] = useState(false);
 
     // load data
+    const fetchAll = async () => {
+        setLoading(true);
+        setErr(null);
+        try {
+            const [lres, rres] = await Promise.all([
+                fetch(`${API_BASE}/api/listings`),
+                fetch(`${API_BASE}/api/reviews/combined?limit=500&offset=0`),
+            ]);
+            const listings = (await safeJson<Listing[]>(lres)) ?? [];
+            const r =
+                (await safeJson<NormalizedReviewResponse>(rres)) ??
+                ({source: "combined", count: 0, reviews: []} as NormalizedReviewResponse);
+            setAllListings(listings);
+            setReviews(r.reviews ?? []);
+        } catch (e: any) {
+            setErr(e?.message || "Failed to load data");
+        } finally {
+            setLoading(false);
+        }
+    };
+
     useEffect(() => {
-        (async () => {
-            setLoading(true);
-            try {
-                const [lres, rres] = await Promise.all([fetch("/api/listings"), fetch("/api/reviews/combined?limit=500&offset=0")]);
-                setAllListings((await safeJson<Listing[]>(lres)) ?? []);
-                const r = (await safeJson<NormalizedReviewResponse>(rres)) ?? {
-                    source: "combined",
-                    count: 0,
-                    reviews: []
-                };
-                setReviews(r.reviews ?? []);
-            } finally {
-                setLoading(false);
-            }
-        })();
+        fetchAll();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     // channels & listings
@@ -213,8 +226,7 @@ export default function ManagerDashboard() {
     const last30Ratings = last30.map(ratingOf).filter((n) => Number.isFinite(n)) as number[];
     const avgRating30 = last30Ratings.length ? avg(last30Ratings) : NaN;
 
-    const positiveShare =
-        ratings.length ? (ratings.filter((n) => n >= 8).length / ratings.length) * 100 : NaN;
+    const positiveShare = ratings.length ? (ratings.filter((n) => n >= 8).length / ratings.length) * 100 : NaN;
 
     const latestDate = useMemo(() => {
         const ds = filtered.map((r) => toDate(r.submittedAt)?.getTime() ?? -1);
@@ -228,8 +240,7 @@ export default function ManagerDashboard() {
     }, [filtered]);
 
     const ratingBuckets = useMemo(() => {
-        // 0–2, 2–4, 4–6, 6–8, 8–10
-        const buckets = [0, 0, 0, 0, 0];
+        const buckets = [0, 0, 0, 0, 0]; // 0–2, 2–4, 4–6, 6–8, 8–10
         ratings.forEach((n) => {
             if (n < 2) buckets[0] += 1;
             else if (n < 4) buckets[1] += 1;
@@ -281,16 +292,17 @@ export default function ManagerDashboard() {
     // add listing flow
     const doSearch = async () => {
         if (!searchQ.trim()) return setResults([]);
-        const r = await fetch(`/api/listings/search?q=${encodeURIComponent(searchQ.trim())}`);
+        const r = await fetch(`${API_BASE}/api/listings/search?q=${encodeURIComponent(searchQ.trim())}`);
         setResults(((await safeJson(r)) as any[]) ?? []);
     };
     const addListing = async (name: string, placeId: string) => {
         setSaving(true);
         try {
-            await fetch(`/api/listings?name=${encodeURIComponent(name)}&placeId=${encodeURIComponent(placeId)}`, {
-                method: "POST",
-            });
-            const lres = await fetch("/api/listings");
+            await fetch(
+                `${API_BASE}/api/listings?name=${encodeURIComponent(name)}&placeId=${encodeURIComponent(placeId)}`,
+                {method: "POST"}
+            );
+            const lres = await fetch(`${API_BASE}/api/listings`);
             setAllListings((await safeJson<Listing[]>(lres)) ?? []);
             setAddOpen(false);
             setSearchQ("");
@@ -305,7 +317,13 @@ export default function ManagerDashboard() {
         <div className="mx-auto max-w-6xl px-4 py-6">
             <h1 className="text-3xl font-bold mb-6">Manager Dashboard</h1>
 
-            {/* Filters (single compact band like the screenshot) */}
+            {err && (
+                <div className="mb-4 rounded border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-700">
+                    {err}
+                </div>
+            )}
+
+            {/* Filters */}
             <div className="grid grid-cols-1 md:grid-cols-12 gap-3 mb-4 items-center">
                 <input
                     className="border rounded px-3 py-2 md:col-span-3"
@@ -313,8 +331,11 @@ export default function ManagerDashboard() {
                     value={query}
                     onChange={(e) => setQuery(e.target.value)}
                 />
-                <select className="border rounded px-3 py-2 md:col-span-2" value={channel}
-                        onChange={(e) => setChannel(e.target.value)}>
+                <select
+                    className="border rounded px-3 py-2 md:col-span-2"
+                    value={channel}
+                    onChange={(e) => setChannel(e.target.value)}
+                >
                     {channels.map((c) => (
                         <option key={c} value={c}>
                             {c === "all" ? "All" : c}
@@ -322,8 +343,11 @@ export default function ManagerDashboard() {
                     ))}
                 </select>
                 <div className="flex gap-2 md:col-span-3">
-                    <select className="border rounded px-3 py-2 flex-1" value={listing}
-                            onChange={(e) => setListing(e.target.value)}>
+                    <select
+                        className="border rounded px-3 py-2 flex-1"
+                        value={listing}
+                        onChange={(e) => setListing(e.target.value)}
+                    >
                         {listingNames.map((n) => (
                             <option key={n} value={n}>
                                 {n === "all" ? "All" : n}
@@ -352,43 +376,45 @@ export default function ManagerDashboard() {
                     onChange={(e) => setRatingMax(Number(e.target.value))}
                     placeholder="Max"
                 />
-                <input className="border rounded px-3 py-2 md:col-span-1" type="date" value={from}
-                       onChange={(e) => setFrom(e.target.value)}/>
-                <input className="border rounded px-3 py-2 md:col-span-1" type="date" value={to}
-                       onChange={(e) => setTo(e.target.value)}/>
+                <input
+                    className="border rounded px-3 py-2 md:col-span-1"
+                    type="date"
+                    value={from}
+                    onChange={(e) => setFrom(e.target.value)}
+                />
+                <input
+                    className="border rounded px-3 py-2 md:col-span-1"
+                    type="date"
+                    value={to}
+                    onChange={(e) => setTo(e.target.value)}
+                />
                 <div className="flex gap-2 md:col-span-3">
-                    <select className="border rounded px-3 py-2" value={sort}
-                            onChange={(e) => setSort(e.target.value as any)}>
+                    <select
+                        className="border rounded px-3 py-2"
+                        value={sort}
+                        onChange={(e) => setSort(e.target.value as any)}
+                    >
                         <option value="submittedAt">Date</option>
                         <option value="rating">Rating</option>
                     </select>
-                    <select className="border rounded px-3 py-2" value={dir}
-                            onChange={(e) => setDir(e.target.value as any)}>
+                    <select
+                        className="border rounded px-3 py-2"
+                        value={dir}
+                        onChange={(e) => setDir(e.target.value as any)}
+                    >
                         <option value="desc">Desc</option>
                         <option value="asc">Asc</option>
                     </select>
                     <label className="flex items-center gap-2 text-sm text-gray-700">
-                        <input type="checkbox" className="accent-black" checked={onlySelected}
-                               onChange={(e) => setOnlySelected(e.target.checked)}/>
+                        <input
+                            type="checkbox"
+                            className="accent-black"
+                            checked={onlySelected}
+                            onChange={(e) => setOnlySelected(e.target.checked)}
+                        />
                         Only selected
                     </label>
-                    <button
-                        className="ml-auto border rounded px-3 py-2"
-                        onClick={async () => {
-                            setLoading(true);
-                            try {
-                                const rres = await fetch("/api/reviews/combined?limit=500&offset=0");
-                                const r = (await safeJson<NormalizedReviewResponse>(rres)) ?? {
-                                    source: "combined",
-                                    count: 0,
-                                    reviews: [],
-                                };
-                                setReviews(r.reviews ?? []);
-                            } finally {
-                                setLoading(false);
-                            }
-                        }}
-                    >
+                    <button className="ml-auto border rounded px-3 py-2" onClick={fetchAll}>
                         Refresh
                     </button>
                 </div>
@@ -397,17 +423,16 @@ export default function ManagerDashboard() {
             {/* KPI rows */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-3">
                 <StatCard label="Total Reviews" value={loading ? "…" : totalReviews}/>
-                <StatCard label="Avg Rating"
-                          value={loading || !Number.isFinite(avgRatingAll) ? "–" : avgRatingAll.toFixed(2)}/>
+                <StatCard
+                    label="Avg Rating"
+                    value={loading || !Number.isFinite(avgRatingAll) ? "–" : avgRatingAll.toFixed(2)}
+                />
                 <StatCard label="# Listings" value={loading ? "…" : listingCount}/>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-4 gap-3 mb-6">
-                <StatCard
-                    label="Reviews (30 days)"
-                    value={loading ? "…" : last30.length}
-                    sub="based on submitted date"
-                />
+                <StatCard label="Reviews (30 days)" value={loading ? "…" : last30.length}
+                          sub="based on submitted date"/>
                 <StatCard
                     label="Avg Rating (30 days)"
                     value={loading || !Number.isFinite(avgRating30) ? "–" : avgRating30.toFixed(2)}
@@ -441,13 +466,7 @@ export default function ManagerDashboard() {
                 <div className="border rounded-lg p-4 bg-white">
                     <div className="font-semibold mb-3">Rating distribution</div>
                     <div className="space-y-2">
-                        {[
-                            "0–2",
-                            "2–4",
-                            "4–6",
-                            "6–8",
-                            "8–10",
-                        ].map((label, i) => (
+                        {["0–2", "2–4", "4–6", "6–8", "8–10"].map((label, i) => (
                             <div key={label}>
                                 <div className="flex justify-between text-xs text-gray-600 mb-1">
                                     <span>{label}</span>
@@ -557,7 +576,7 @@ export default function ManagerDashboard() {
 
             {/* Add listing modal */}
             {addOpen && (
-                <div className="fixed inset-0 bg-black/30 flex items-center justify-center">
+                <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50">
                     <div className="bg-white rounded-lg shadow-lg w-full max-w-2xl p-4">
                         <div className="flex items-center justify-between mb-3">
                             <div className="font-semibold">Add listing from Google</div>
